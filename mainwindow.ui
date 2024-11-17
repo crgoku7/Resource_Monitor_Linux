@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>808</width>
-    <height>741</height>
+    <width>802</width>
+    <height>847</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -21,136 +21,135 @@
        <attribute name="title">
         <string>Tab 1</string>
        </attribute>
-       <widget class="QGroupBox" name="CPUBox">
-        <property name="geometry">
-         <rect>
-          <x>20</x>
-          <y>30</y>
-          <width>741</width>
-          <height>121</height>
-         </rect>
-        </property>
-        <property name="title">
-         <string>CPU</string>
-        </property>
-        <widget class="QProgressBar" name="cpuProgressBar">
-         <property name="geometry">
-          <rect>
-           <x>40</x>
-           <y>60</y>
-           <width>118</width>
-           <height>23</height>
-          </rect>
-         </property>
-         <property name="value">
-          <number>24</number>
-         </property>
-        </widget>
-       </widget>
-       <widget class="QGroupBox" name="NetworkBox">
-        <property name="geometry">
-         <rect>
-          <x>20</x>
-          <y>190</y>
-          <width>741</width>
-          <height>131</height>
-         </rect>
-        </property>
-        <property name="title">
-         <string>Network Usage</string>
-        </property>
-        <widget class="QLabel" name="networkRxLabel">
-         <property name="geometry">
-          <rect>
-           <x>40</x>
-           <y>40</y>
-           <width>631</width>
-           <height>18</height>
-          </rect>
-         </property>
-         <property name="text">
-          <string>TextLabel</string>
-         </property>
-        </widget>
-        <widget class="QLabel" name="networkTxLabel">
-         <property name="geometry">
-          <rect>
-           <x>40</x>
-           <y>80</y>
-           <width>681</width>
-           <height>18</height>
-          </rect>
-         </property>
-         <property name="text">
-          <string>TextLabel</string>
-         </property>
-        </widget>
-       </widget>
-       <widget class="QGroupBox" name="MemoryBox">
-        <property name="geometry">
-         <rect>
-          <x>20</x>
-          <y>360</y>
-          <width>741</width>
-          <height>131</height>
-         </rect>
-        </property>
-        <property name="title">
-         <string>Memory Usage</string>
-        </property>
-        <widget class="QProgressBar" name="memoryProgressBar">
-         <property name="geometry">
-          <rect>
-           <x>40</x>
-           <y>60</y>
-           <width>118</width>
-           <height>23</height>
-          </rect>
-         </property>
-         <property name="value">
-          <number>24</number>
-         </property>
-        </widget>
-       </widget>
-       <widget class="QGroupBox" name="DiskBox">
-        <property name="geometry">
-         <rect>
-          <x>20</x>
-          <y>530</y>
-          <width>741</width>
-          <height>141</height>
-         </rect>
-        </property>
-        <property name="title">
-         <string>Disk Usage</string>
-        </property>
-        <widget class="QLabel" name="ioReadLabel">
-         <property name="geometry">
-          <rect>
-           <x>40</x>
-           <y>50</y>
-           <width>671</width>
-           <height>18</height>
-          </rect>
-         </property>
-         <property name="text">
-          <string>TextLabel</string>
-         </property>
-        </widget>
-        <widget class="QLabel" name="ioWriteLabel">
-         <property name="geometry">
-          <rect>
-           <x>40</x>
-           <y>90</y>
-           <width>681</width>
-           <height>18</height>
-          </rect>
-         </property>
-         <property name="text">
-          <string>TextLabel</string>
-         </property>
-        </widget>
-       </widget>
+       <layout class="QVBoxLayout" name="verticalLayout_2">
+        <item>
+         <widget class="QGroupBox" name="groupBox">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>280</height>
+           </size>
+          </property>
+          <property name="title">
+           <string>CPUBox</string>
+          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_3">
+           <item>
+            <widget class="QCustomPlot" name="cpuPlotLayout" native="true">
+             <property name="minimumSize">
+              <size>
+               <width>0</width>
+               <height>150</height>
+              </size>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QFrame" name="cpuLabelFrame">
+             <property name="minimumSize">
+              <size>
+               <width>0</width>
+               <height>80</height>
+              </size>
+             </property>
+             <property name="frameShape">
+              <enum>QFrame::StyledPanel</enum>
+             </property>
+             <property name="frameShadow">
+              <enum>QFrame::Raised</enum>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="NetworkBox">
+          <property name="title">
+           <string>Network Usage</string>
+          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_4">
+           <item>
+            <widget class="QCustomPlot" name="networkPlot" native="true">
+             <property name="minimumSize">
+              <size>
+               <width>0</width>
+               <height>120</height>
+              </size>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="networkRxLabel">
+             <property name="text">
+              <string>TextLabel</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="networkTxLabel">
+             <property name="text">
+              <string>TextLabel</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="MemoryBox">
+          <property name="title">
+           <string>Memory Usage</string>
+          </property>
+          <widget class="QProgressBar" name="memoryProgressBar">
+           <property name="geometry">
+            <rect>
+             <x>40</x>
+             <y>60</y>
+             <width>118</width>
+             <height>23</height>
+            </rect>
+           </property>
+           <property name="value">
+            <number>24</number>
+           </property>
+          </widget>
+         </widget>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="DiskBox">
+          <property name="title">
+           <string>Disk Usage</string>
+          </property>
+          <widget class="QLabel" name="ioReadLabel">
+           <property name="geometry">
+            <rect>
+             <x>40</x>
+             <y>50</y>
+             <width>671</width>
+             <height>18</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>TextLabel</string>
+           </property>
+          </widget>
+          <widget class="QLabel" name="ioWriteLabel">
+           <property name="geometry">
+            <rect>
+             <x>40</x>
+             <y>90</y>
+             <width>681</width>
+             <height>18</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>TextLabel</string>
+           </property>
+          </widget>
+         </widget>
+        </item>
+       </layout>
       </widget>
       <widget class="QWidget" name="tab_2">
        <attribute name="title">
@@ -162,6 +161,14 @@
    </layout>
   </widget>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>QCustomPlot</class>
+   <extends>QWidget</extends>
+   <header>qcustomplot.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

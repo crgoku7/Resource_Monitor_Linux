@@ -2,6 +2,9 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QVector>
+#include <QTimer>
+#include "qcustomplot.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -23,5 +26,8 @@ private:
     void updateMemoryUsage();
     void updateNetworkInfo();
     void updateIOInfo();
+    qint64 previousRxBytes = 0;
+    qint64 previousTxBytes = 0;
+    QElapsedTimer networkTimer;
 };
 #endif // MAINWINDOW_H
