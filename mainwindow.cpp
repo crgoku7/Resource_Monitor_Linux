@@ -3,53 +3,62 @@
 #include <QTimer>
 #include <QFile>
 #include <QTextStream>
+#include <bits/stdc++.h>
+
+QVector<QVector<double>> cpuUsageVector(13,QVector<double>(60,0));
 
 // Implement CPU, Memory, Network, and IO info retrieval functions here
-double getCpuUsage() {
-    static long long lastTotalUser = 0, lastTotalUserLow = 0, lastTotalSys = 0, lastTotalIdle = 0;
+QVector<double> getCpuUsages() {
+    static QVector<long long> lastUser, lastNice, lastSystem, lastIdle;
+    QVector<double> cpuUsages;
 
     QFile file("/proc/stat");
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-        return -1.0;  // Return -1 on failure to read
+        return cpuUsages;
 
     QTextStream in(&file);
-    QString line = in.readLine();  // First line contains CPU data
-    file.close();  // Always close the file after reading
+    QString line;
+    QVector<long long> user, nice, system, idle;
 
-    if (line.isEmpty()) {
-        return -1.0;  // Handle empty lines
+    // Read CPU stats for each core
+    while (in.readLineInto(&line)) {
+        if (line.startsWith("cpu")) {
+            QStringList cpuData = line.split(QRegExp("\\s+"), QString::SkipEmptyParts);
+            user.append(cpuData[1].toLongLong());
+            nice.append(cpuData[2].toLongLong());
+            system.append(cpuData[3].toLongLong());
+            idle.append(cpuData[4].toLongLong());
+
+            if (lastUser.size() < user.size()) {
+                lastUser.resize(user.size());
+                lastNice.resize(nice.size());
+                lastSystem.resize(system.size());
+                lastIdle.resize(idle.size());
+            }
+        }
     }
 
-    QStringList cpuData = line.split(QRegExp("\\s+"), QString::SkipEmptyParts);
-    if (cpuData.size() < 5) {
-        return -1.0;  // Ensure we have enough fields
+    for (int i = 0; i < user.size(); ++i) {
+        long long totalUser = user[i];
+        long long totalNice = nice[i];
+        long long totalSystem = system[i];
+        long long totalIdle = idle[i];
+
+        long long total = (totalUser - lastUser[i]) + (totalNice - lastNice[i]) +
+                          (totalSystem - lastSystem[i]) + (totalIdle - lastIdle[i]);
+
+        long long totalIdleDelta = totalIdle - lastIdle[i];
+
+        lastUser[i] = totalUser;
+        lastNice[i] = totalNice;
+        lastSystem[i] = totalSystem;
+        lastIdle[i] = totalIdle;
+
+        double cpuUsage = 100.0 * (1.0 - (totalIdleDelta / (double)total));
+        cpuUsages.append(cpuUsage);
     }
 
-    long long user = cpuData[1].toLongLong();
-    long long nice = cpuData[2].toLongLong();
-    long long system = cpuData[3].toLongLong();
-    long long idle = cpuData[4].toLongLong();
-
-    long long totalUser = user;
-    long long totalUserLow = nice;
-    long long totalSys = system;
-    long long totalIdle = idle;
-
-    long long total = (totalUser - lastTotalUser) + (totalUserLow - lastTotalUserLow) +
-                      (totalSys - lastTotalSys) + (totalIdle - lastTotalIdle);
-
-    long long totalIdleDelta = totalIdle - lastTotalIdle;
-
-    lastTotalUser = totalUser;
-    lastTotalUserLow = totalUserLow;
-    lastTotalSys = totalSys;
-    lastTotalIdle = totalIdle;
-
-    if (total == 0) return -1.0;  // Prevent division by zero
-
-    double cpuUsage = 100.0 * (1.0 - (totalIdleDelta / static_cast<double>(total)));
-
-    return cpuUsage;
+    return cpuUsages;
 }
 
 double getMemoryUsage() {
@@ -84,8 +93,8 @@ double getMemoryUsage() {
 }
 
 struct NetworkInfo {
-    long long rxBytes;
-    long long txBytes;
+    qint64 rxBytes; // Total received bytes
+    qint64 txBytes; // Total transmitted bytes
 };
 
 NetworkInfo getNetworkInfo() {
@@ -143,11 +152,100 @@ IOInfo getIOInfo() {
 }
 
 // Functions to update the UI with the latest data
+bool legendCreated = false;
+QVector<QLabel*> usageLabels;
 void MainWindow::updateCpuUsage() {
-    double cpuUsage = getCpuUsage();
-    if (cpuUsage >= 0) {  // Check if data is valid
-        ui->cpuProgressBar->setValue(static_cast<int>(cpuUsage));
+    QVector<double> cpuUsage = getCpuUsages();
+    int coreCount = cpuUsage.size();
+    for (int i = 0; i<cpuUsage.size();i++){
+        cpuUsageVector[i].push_front(cpuUsage[i]);
     }
+
+    QVector<double> points(60,0);
+    for(int i = 0;i<60;i++){
+        points[i] = i;
+    }
+
+
+
+    auto cpuPlotLayout = ui->cpuPlotLayout;
+    cpuPlotLayout->xAxis->setRange(0, 60);
+    cpuPlotLayout->yAxis->setRange(0, 100);
+    cpuPlotLayout->clearPlottables();
+
+
+    for(int i = 0;i<cpuUsage.size();i++){
+        QCPGraph *graph = cpuPlotLayout->addGraph();
+        if(i == 0){
+            graph->setName("CPU AVG");
+        }
+        else{
+            graph->setName("CPU" + QString::number(i));
+        }
+
+        graph->setPen(QPen(QColor::fromHsv((i * 30) % 360, 255, 255)));
+
+        QVector<double> usage(60,0);
+        for(int j = 0; j<60;j++){
+            usage[j] = cpuUsageVector[i][j];
+        }
+        graph->data()->clear();
+        graph->setData(points,usage);
+
+    }
+
+    if (!legendCreated) {
+        QGridLayout *gridLayout = new QGridLayout(ui->cpuLabelFrame);
+        ui->cpuLabelFrame->setLayout(gridLayout);
+
+        for (int i = 0; i < coreCount; i++) {
+            QColor color = QColor::fromHsv((i * 30) % 360, 255, 255);
+
+            QWidget *legendEntry = new QWidget(ui->cpuLabelFrame);
+            QHBoxLayout *entryLayout = new QHBoxLayout(legendEntry);
+            entryLayout->setContentsMargins(0, 0, 0, 0);
+
+            QLabel *colorBox = new QLabel();
+            colorBox->setFixedSize(15, 15);
+            colorBox->setStyleSheet(QString("background-color: %1; border: 1px solid black;").arg(color.name()));
+
+            QLabel *label;
+            if(i == 0){
+                label = new QLabel("CPU AVG");
+            }
+            else{
+                label = new QLabel("CPU " + QString::number(i));
+            }
+
+
+            QLabel *usageLabel = new QLabel("0%"); // Initial usage set to 0%
+            usageLabels.append(usageLabel); // Store reference for updating dynamically
+
+            entryLayout->addWidget(colorBox);
+            entryLayout->addWidget(label);
+            entryLayout->addWidget(usageLabel);
+            entryLayout->addStretch();
+
+            legendEntry->setLayout(entryLayout);
+
+            // Add legend entry to grid layout (4 per row)
+            int row = i / 4;
+            int col = i % 4;
+            gridLayout->addWidget(legendEntry, row, col);
+        }
+
+        legendCreated = true;
+    }
+
+    // Update usage percentages in the legend
+    for (int i = 0; i < coreCount; i++) {
+        usageLabels[i]->setText(QString::number(cpuUsage[i], 'f', 1) + "%");
+    }
+
+    cpuPlotLayout->replot();
+    cpuPlotLayout->update();
+
+
 }
 
 void MainWindow::updateMemoryUsage() {
@@ -157,11 +255,54 @@ void MainWindow::updateMemoryUsage() {
     }
 }
 
+QVector<double> rxRateHistory;  // Store Rx rates for plotting
+QVector<double> txRateHistory;  // Store Tx rates for plotting
+int networkHistoryLength = 60;  // Number of points on the plot
+
+
 void MainWindow::updateNetworkInfo() {
     NetworkInfo netInfo = getNetworkInfo();
-    ui->networkRxLabel->setText(QString::number(netInfo.rxBytes / 1024) + " KB received");
-    ui->networkTxLabel->setText(QString::number(netInfo.txBytes / 1024) + " KB transmitted");
+
+    // Calculate elapsed time in seconds
+    double elapsedTime = networkTimer.restart() / 1000.0; // Restart timer and get elapsed time in seconds
+
+    // Calculate rates (in KB/s)
+    double rxRate = (netInfo.rxBytes - previousRxBytes) / 1024.0 / elapsedTime;
+    double txRate = (netInfo.txBytes - previousTxBytes) / 1024.0 / elapsedTime;
+
+    // Update total and current rate labels
+    ui->networkRxLabel->setText(
+        QString("Total: %1 KB, Current: %2 KB/s").arg(netInfo.rxBytes / 1024).arg(rxRate, 0, 'f', 2));
+    ui->networkTxLabel->setText(
+        QString("Total: %1 KB, Current: %2 KB/s").arg(netInfo.txBytes / 1024).arg(txRate, 0, 'f', 2));
+
+    // Update plot data
+    rxRateHistory.pop_back();
+    rxRateHistory.push_front(rxRate);
+
+    txRateHistory.pop_back();
+    txRateHistory.push_front(txRate);
+
+    QVector<double> xPoints(networkHistoryLength);
+    for (int i = 0; i < networkHistoryLength; ++i) {
+        xPoints[i] = i;
+    }
+
+    ui->networkPlot->graph(0)->setData(xPoints, rxRateHistory); // Rx graph
+    ui->networkPlot->graph(1)->setData(xPoints, txRateHistory); // Tx graph
+
+    // Adjust y-axis dynamically based on data
+    double maxRate = std::max(*std::max_element(rxRateHistory.begin(), rxRateHistory.end()),
+                              *std::max_element(txRateHistory.begin(), txRateHistory.end()));
+    ui->networkPlot->yAxis->setRange(0, std::max(maxRate * 1.1, 10.0)); // Add some headroom
+
+    ui->networkPlot->replot();
+
+    // Store current values for the next update
+    previousRxBytes = netInfo.rxBytes;
+    previousTxBytes = netInfo.txBytes;
 }
+
 
 void MainWindow::updateIOInfo() {
     IOInfo ioInfo = getIOInfo();
@@ -182,7 +323,23 @@ MainWindow::MainWindow(QWidget *parent)
     connect(timer, &QTimer::timeout, this, &MainWindow::updateMemoryUsage);
     connect(timer, &QTimer::timeout, this, &MainWindow::updateNetworkInfo);
     connect(timer, &QTimer::timeout, this, &MainWindow::updateIOInfo);
+    rxRateHistory.fill(0, networkHistoryLength);
+    txRateHistory.fill(0, networkHistoryLength);
+
+    // Configure the network plot
+    ui->networkPlot->addGraph(); // Graph 0 for Rx
+    ui->networkPlot->graph(0)->setPen(QPen(Qt::blue)); // Blue for Rx
+
+    ui->networkPlot->addGraph(); // Graph 1 for Tx
+    ui->networkPlot->graph(1)->setPen(QPen(Qt::red)); // Red for Tx
+
+    ui->networkPlot->xAxis->setRange(0, networkHistoryLength);
+    ui->networkPlot->yAxis->setRange(0, 1024); // Adjust as needed (e.g., 1024 KB/s)
+    ui->networkPlot->xAxis->setLabel("Time (s)");
+    ui->networkPlot->yAxis->setLabel("Rate (KB/s)");
+
     timer->start(1000);  // Update every second
+
 }
 
 // Destructor
