@@ -19,7 +19,7 @@ The implementation makes use of the [**/proc**](https://man7.org/linux/man-pages
 ## Use of /proc filesystem
 The /proc filesystem is a pseudo-filesystem which provides an interface to internal kernel data structures. These kernel data structures store data about the current state of the system. For example, the Process Control Block (PCB) is a kernel data structure for a process created by kernel to store the process information.
 
-### The /proc filesystem contains virtual files that store different information on aspects of the system-
+### The /proc filesystem contains virtual files that store information on different aspects of the system-
  - [**/proc/stat**](https://www.linuxhowtos.org/System/procstat.htm)
 
     This file contains the overall statistics of information about kernel activity. The information about the usage of individual CPUs & the overall usage is obtained from here.
