@@ -3,7 +3,12 @@
 #include <QTimer>
 #include <QFile>
 #include <QTextStream>
+#include <QDir>
 #include <bits/stdc++.h>
+#include <unistd.h>
+#include <pwd.h>
+#include <sys/types.h>
+#include <ctime>
 
 QVector<QVector<double>> cpuUsageVector(13,QVector<double>(60,0));
 
@@ -151,6 +156,217 @@ IOInfo getIOInfo() {
     return io;
 }
 
+struct ProcessInfo {
+    int pid;
+    QString name;
+    QString resUsage; // For CPU/Memory usage (placeholder)
+    QString virUsage;
+};
+
+
+long getProcessMemoryUsage(int pid) {
+    QFile statmFile("/proc/" + QString::number(pid) + "/statm");
+    if (!statmFile.open(QIODevice::ReadOnly | QIODevice::Text))
+        return -1;  // Return -1 on failure
+
+    QTextStream in(&statmFile);
+    QString line = in.readLine();
+    statmFile.close();
+
+    if (!line.isEmpty()) {
+        QStringList parts = line.split(" ");
+        if (!parts.isEmpty()) {
+            long pages = parts[0].toLong();
+            long pageSize = sysconf(_SC_PAGESIZE); // Get page size in bytes
+            return pages * pageSize / 1024;       // Convert to KB
+        }
+    }
+    return -1;
+}
+
+long getProcessMemoryUsageFromStatus(int pid) {
+    QFile statusFile("/proc/" + QString::number(pid) + "/status");
+    if (!statusFile.open(QIODevice::ReadOnly | QIODevice::Text))
+        return -1;  // Return -1 on failure
+
+    QTextStream in(&statusFile);
+    QString line;
+
+    while (in.readLineInto(&line)) {
+        if (line.startsWith("VmRSS:")) {
+            QStringList parts = line.split(QRegExp("\\s+"));
+            if (parts.size() > 1) {
+                return parts[1].toLong(); // Memory usage in KB
+            }
+        }
+    }
+
+    return -1;  // Return -1 if VmRSS is not found
+}
+
+
+QVector<ProcessInfo> getActiveProcesses() {
+    QVector<ProcessInfo> processes;
+    QDir procDir("/proc");
+    QStringList procEntries = procDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+
+    for (const QString &entry : procEntries) {
+        bool isPid = false;
+        int pid = entry.toInt(&isPid);
+
+        if (isPid) {
+            QFile statusFile("/proc/" + entry + "/status");
+            if (statusFile.open(QIODevice::ReadOnly)) {
+                QTextStream in(&statusFile);
+                QString line;
+                QString name;
+
+                while (in.readLineInto(&line)) {
+                    if (line.startsWith("Name:")) {
+                        name = line.split(QRegExp("\\s+"))[1];
+                        break;
+                    }
+                }
+
+                double resUsage = getProcessMemoryUsage(pid);
+                double virUsage = getProcessMemoryUsageFromStatus(pid);
+
+                processes.append({
+                    pid,
+                    name,
+                    resUsage > 0 ? QString::number(resUsage / 1024.0, 'f', 2) + " MB" : "N/A",
+                    virUsage > 0 ? QString::number(virUsage / 1024.0, 'f', 2) + " MB" : "N/A"
+                });
+            }
+        }
+    }
+    return processes;
+}
+
+// struct ProcessDetails {
+//     QString processId;
+//     QString processName;
+//     QString user;
+//     QString status;
+//     QString startTime;
+//     QString priority;
+//     QString controlGroup;
+//     QString cpu;
+//     QString cpuTime;
+// };
+
+ProcessDetails MainWindow::getProcessDetails(const QString &pid) {
+    ProcessDetails details;
+    details.processId = pid;
+
+    // Get process name
+    QFile commFile("/proc/" + pid + "/comm");
+    if (commFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        details.processName = commFile.readLine().trimmed();
+        commFile.close();
+    } else {
+        details.processName = "Unknown";
+    }
+
+    // Get user and status
+    QFile statusFile("/proc/" + pid + "/status");
+    if (statusFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QTextStream in(&statusFile);
+        QString line;
+        while (in.readLineInto(&line)) {
+            if (line.startsWith("Uid:")) {
+                QStringList tokens = line.split(QRegExp("\\s+"));
+                if (tokens.size() > 1) {
+                    QString uid = tokens[1];
+                    struct passwd *pwd = getpwuid(uid.toInt());
+                    details.user = pwd ? QString(pwd->pw_name) : "Unknown";
+                }
+            } else if (line.startsWith("State:")) {
+                details.status = line.split(QRegExp("\\s+"))[1];
+            } else if (line.startsWith("Priority:")) {
+                details.priority = line.split(QRegExp("\\s+"))[1];
+            }
+        }
+        statusFile.close();
+    } else {
+        details.user = "Unknown";
+        details.status = "Unknown";
+        details.priority = "Unknown";
+    }
+
+    // Get CPU time and start time
+    QFile statFile("/proc/" + pid + "/stat");
+    if (statFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QString line = statFile.readLine();
+        QStringList tokens = line.split(QRegExp("\\s+"));
+        if (tokens.size() > 16) {
+            long utime = tokens[13].toLong();
+            long stime = tokens[14].toLong();
+            long startTimeTicks = tokens[21].toLong();
+            long hertz = sysconf(_SC_CLK_TCK);
+
+            details.cpuTime = QString::number((utime + stime) / static_cast<double>(hertz), 'f', 2) + " seconds";
+
+            // Convert start time to a readable format
+            time_t startTime = startTimeTicks / hertz;
+            details.startTime = QString::fromStdString(std::asctime(std::localtime(&startTime))).trimmed();
+        }
+        statFile.close();
+    } else {
+        details.cpuTime = "Unknown";
+        details.startTime = "Unknown";
+    }
+
+    // Get control group
+    QFile cgroupFile("/proc/" + pid + "/cgroup");
+    if (cgroupFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        details.controlGroup = cgroupFile.readAll().trimmed();
+        cgroupFile.close();
+    } else {
+        details.controlGroup = "Unknown";
+    }
+
+    // Get CPU (dummy value as an example, this can be extended to fetch actual CPU info)
+    details.cpu = "CPU0"; // Placeholder, extend if needed
+
+    return details;
+}
+
+void MainWindow::on_processDetailButton_clicked() {
+    int selectedRow = ui->processTable->currentRow();
+    if (selectedRow < 0) {
+        QMessageBox::warning(this, "No Process Selected", "Please select a process first.");
+        return;
+    }
+
+    QString processId = ui->processTable->item(selectedRow, 1)->text(); // Assuming PID is in column 0
+    ProcessDetails details = getProcessDetails(processId);
+
+    QString processDetails = QString(
+                                 "Process ID: %1\n"
+                                 "Process Name: %2\n"
+                                 "User: %3\n"
+                                 "Status: %4\n"
+                                 "Start Time: %5\n"
+                                 "Priority: %6\n"
+                                 "Control Group: %7\n"
+
+                                 "CPU Time: %9"
+                                 ).arg(details.processId)
+                                 .arg(details.processName)
+                                 .arg(details.user)
+                                 .arg(details.status)
+                                 .arg(details.startTime)
+                                 .arg(details.priority)
+                                 .arg(details.controlGroup)
+
+                                 .arg(details.cpuTime);
+
+    QMessageBox::information(this, "Process Details", processDetails);
+}
+
+
+
 // Functions to update the UI with the latest data
 bool legendCreated = false;
 QVector<QLabel*> usageLabels;
@@ -248,11 +464,32 @@ void MainWindow::updateCpuUsage() {
 
 }
 
+QVector<double> memoryUsageHistory; // Store memory usage values for the plot
+int memoryHistoryLength = 60;       // Number of points on the memory usage plot
+
+
 void MainWindow::updateMemoryUsage() {
     double memoryUsage = getMemoryUsage();
-    if (memoryUsage >= 0) {  // Check if data is valid
-        ui->memoryProgressBar->setValue(static_cast<int>(memoryUsage));
+    if (memoryUsage < 0) return; // Invalid data, skip update
+
+    // Update memory usage label
+    ui->memoryUsageLabel->setText(QString("Current Memory Usage: %1%").arg(memoryUsage, 0, 'f', 2));
+
+    // Update memory usage history
+    memoryUsageHistory.pop_back();
+    memoryUsageHistory.push_front(memoryUsage);
+
+    // Generate X-axis points
+    QVector<double> xPoints(memoryHistoryLength);
+    for (int i = 0; i < memoryHistoryLength; ++i) {
+        xPoints[i] = i;
     }
+
+    // Update memory usage plot
+    ui->memoryPlot->graph(0)->setData(xPoints, memoryUsageHistory);
+
+    // Replot with updated data
+    ui->memoryPlot->replot();
 }
 
 QVector<double> rxRateHistory;  // Store Rx rates for plotting
@@ -272,9 +509,9 @@ void MainWindow::updateNetworkInfo() {
 
     // Update total and current rate labels
     ui->networkRxLabel->setText(
-        QString("Total: %1 KB, Current: %2 KB/s").arg(netInfo.rxBytes / 1024).arg(rxRate, 0, 'f', 2));
+        QString("Sent Total: %1 KB, Current: %2 KB/s").arg(netInfo.rxBytes / 1024).arg(rxRate, 0, 'f', 2));
     ui->networkTxLabel->setText(
-        QString("Total: %1 KB, Current: %2 KB/s").arg(netInfo.txBytes / 1024).arg(txRate, 0, 'f', 2));
+        QString("Received Total: %1 KB, Current: %2 KB/s").arg(netInfo.txBytes / 1024).arg(txRate, 0, 'f', 2));
 
     // Update plot data
     rxRateHistory.pop_back();
@@ -303,11 +540,101 @@ void MainWindow::updateNetworkInfo() {
     previousTxBytes = netInfo.txBytes;
 }
 
+QVector<double> readSpeedHistory; // Historical read speeds
+QVector<double> writeSpeedHistory; // Historical write speeds
+long long previousReadSectors = 0; // Previous total read sectors
+long long previousWriteSectors = 0; // Previous total write sectors
+double sectorSizeKB = 0.5; // Sector size in KB
+int ioHistoryLength = 60; // Number of points on the I/O plot
+
+
 
 void MainWindow::updateIOInfo() {
     IOInfo ioInfo = getIOInfo();
-    ui->ioReadLabel->setText(QString::number(ioInfo.readSectors) + " sectors read");
-    ui->ioWriteLabel->setText(QString::number(ioInfo.writeSectors) + " sectors written");
+
+    // Calculate read/write speeds in MB
+    long long deltaReadSectors = ioInfo.readSectors - previousReadSectors;
+    long long deltaWriteSectors = ioInfo.writeSectors - previousWriteSectors;
+
+    double readSpeedMB = (deltaReadSectors * sectorSizeKB) / 1024; // Convert to MB
+    double writeSpeedMB = (deltaWriteSectors * sectorSizeKB) / 1024; // Convert to MB
+
+    // Update previous values for the next calculation
+    previousReadSectors = ioInfo.readSectors;
+    previousWriteSectors = ioInfo.writeSectors;
+
+    // Update labels to display MB
+    ui->ioReadLabel->setText(QString("Total: %1 MB, Current: %2 MB/s")
+                                 .arg((ioInfo.readSectors * sectorSizeKB) / 1024)
+                                 .arg(readSpeedMB, 0, 'f', 2));
+    ui->ioWriteLabel->setText(QString("Total: %1 MB, Current: %2 MB/s")
+                                  .arg((ioInfo.writeSectors * sectorSizeKB) / 1024)
+                                  .arg(writeSpeedMB, 0, 'f', 2));
+
+    // Update plot data with read and write speeds in MB
+    readSpeedHistory.pop_back();
+    readSpeedHistory.push_front(readSpeedMB);
+
+    writeSpeedHistory.pop_back();
+    writeSpeedHistory.push_front(writeSpeedMB);
+
+    QVector<double> xPoints(ioHistoryLength);
+    for (int i = 0; i < ioHistoryLength; ++i) {
+        xPoints[i] = i;
+    }
+
+    ui->ioPlot->graph(0)->setData(xPoints, readSpeedHistory); // Read speeds in MB
+    ui->ioPlot->graph(1)->setData(xPoints, writeSpeedHistory); // Write speeds in MB
+
+    // Adjust y-axis dynamically
+    double maxSpeed = std::max(*std::max_element(readSpeedHistory.begin(), readSpeedHistory.end()),
+                               *std::max_element(writeSpeedHistory.begin(), writeSpeedHistory.end()));
+    ui->ioPlot->yAxis->setRange(0, std::max(maxSpeed * 1.1, 10.0)); // Add some headroom
+
+    ui->ioPlot->replot();
+}
+
+void sortProcessesByName(QVector<ProcessInfo> &processes) {
+    std::sort(processes.begin(), processes.end(), [](const ProcessInfo &a, const ProcessInfo &b) {
+        return a.name < b.name; // Sort alphabetically
+    });
+}
+
+void MainWindow::updateProcessList() {
+    QVector<ProcessInfo> processes = getActiveProcesses();
+    sortProcessesByName(processes);
+    ui->processTable->setRowCount(processes.size());
+    for (int i = 0; i < processes.size(); ++i) {
+
+        ui->processTable->setItem(i, 0, new QTableWidgetItem(processes[i].name));
+        ui->processTable->setItem(i, 1, new QTableWidgetItem(QString::number(processes[i].pid)));
+        ui->processTable->setItem(i, 2, new QTableWidgetItem(processes[i].resUsage));
+        ui->processTable->setItem(i, 3, new QTableWidgetItem(processes[i].virUsage));
+    }
+}
+
+
+void MainWindow::terminateSelectedProcess() {
+    QList<QTableWidgetItem*> selectedItems = ui->processTable->selectedItems();
+
+    if (selectedItems.isEmpty()) {
+        QMessageBox::warning(this, "No Process Selected", "Please select a process to terminate.");
+        return;
+    }
+
+    int selectedRow = selectedItems[0]->row();
+    int pid = ui->processTable->item(selectedRow, 1)->text().toInt();
+
+    // Terminate the process using system command
+    QString command = "kill -9 " + QString::number(pid);
+    int result = system(command.toStdString().c_str());
+
+    if (result == 0) {
+        QMessageBox::information(this, "Process Terminated", "Process " + QString::number(pid) + " terminated successfully.");
+        updateProcessList();
+    } else {
+        QMessageBox::critical(this, "Error", "Failed to terminate process " + QString::number(pid) + ".");
+    }
 }
 
 // Constructor to set up the UI and the update timer
@@ -338,7 +665,43 @@ MainWindow::MainWindow(QWidget *parent)
     ui->networkPlot->xAxis->setLabel("Time (s)");
     ui->networkPlot->yAxis->setLabel("Rate (KB/s)");
 
-    timer->start(1000);  // Update every second
+    memoryUsageHistory.fill(0, memoryHistoryLength); // Initialize memory usage history
+
+    // Configure the memory plot
+    ui->memoryPlot->addGraph();
+    ui->memoryPlot->graph(0)->setPen(QPen(Qt::green)); // Green for memory usage
+    ui->memoryPlot->xAxis->setRange(0, memoryHistoryLength);
+    ui->memoryPlot->yAxis->setRange(0, 100); // Memory usage as a percentage
+    ui->memoryPlot->xAxis->setLabel("Time (s)");
+    ui->memoryPlot->yAxis->setLabel("Usage (%)");
+
+    // Initialize I/O history buffers
+    readSpeedHistory.fill(0, ioHistoryLength);
+    writeSpeedHistory.fill(0, ioHistoryLength);
+
+    // Configure the I/O plot
+    ui->ioPlot->addGraph(); // Graph 0 for read speeds
+    ui->ioPlot->graph(0)->setPen(QPen(Qt::blue)); // Blue for read speeds
+
+    ui->ioPlot->addGraph(); // Graph 1 for write speeds
+    ui->ioPlot->graph(1)->setPen(QPen(Qt::red)); // Red for write speeds
+
+    ui->ioPlot->xAxis->setRange(0, ioHistoryLength);
+    ui->ioPlot->yAxis->setRange(0, 1024); // Adjust as needed for KB/s
+    ui->ioPlot->xAxis->setLabel("Time (s)");
+    ui->ioPlot->yAxis->setLabel("Speed (KB/s)");
+
+
+
+
+
+
+    timer->start(1000);
+
+    connect(ui->endProcessButton, &QPushButton::clicked, this, &MainWindow::terminateSelectedProcess);
+    QTimer *processUpdateTimer = new QTimer(this);
+    connect(processUpdateTimer, &QTimer::timeout, this, &MainWindow::updateProcessList);
+    processUpdateTimer->start(3000);
 
 }
 
@@ -347,3 +710,5 @@ MainWindow::~MainWindow()
 {
     delete ui;
 }
+
+

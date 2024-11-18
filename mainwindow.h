@@ -5,6 +5,19 @@
 #include <QVector>
 #include <QTimer>
 #include "qcustomplot.h"
+#include <QProcess>
+
+struct ProcessDetails {
+    QString processId;
+    QString processName;
+    QString user;
+    QString status;
+    QString startTime;
+    QString priority;
+    QString controlGroup;
+    QString cpu;
+    QString cpuTime;
+};
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -16,7 +29,13 @@ class MainWindow : public QMainWindow
 
 public:
     explicit MainWindow(QWidget *parent = nullptr);
+    ProcessDetails getProcessDetails(const QString &pid);
     ~MainWindow();
+
+private slots:
+    void updateProcessList();
+    void terminateSelectedProcess();
+    void on_processDetailButton_clicked();
 
 private:
     Ui::MainWindow *ui;
@@ -29,5 +48,6 @@ private:
     qint64 previousRxBytes = 0;
     qint64 previousTxBytes = 0;
     QElapsedTimer networkTimer;
+    QVector<QProcess*> processList;
 };
 #endif // MAINWINDOW_H
