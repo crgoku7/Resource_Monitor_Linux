@@ -1,6 +1,9 @@
 # Resource_Monitor_Linux
 A GUI based resource monitor for linux developed in C++.
 
+![Example Output usage](https://github.com/user-attachments/assets/59a120ad-7b08-4ea2-9820-6f1f0bb3e481)
+![Example Output process](https://github.com/user-attachments/assets/386b9f35-cb4e-481b-83d6-db86d0e42211)
+
 The implementation makes use of the [**/proc**](https://man7.org/linux/man-pages/man5/proc.5.html) filesystem to obtain kernel & system information.
 ## Features in the Resource Monitor
  - **CPU Usage Monitoring**
