@@ -38,7 +38,3 @@ The /proc filesystem is a pseudo-filesystem which provides an interface to inter
  - [**kill -9 \<pid\>**](https://www.man7.org/linux/man-pages/man1/kill.1.html)
 
     This command is part of the [**procps**](https://gitlab.com/procps-ng/procps) command line set, which are also implemented using the /proc filesystem. This command with the \'signal\' set to 9, kills the process specified by the PID.
-
- ## Installation
-
- ## Usage
